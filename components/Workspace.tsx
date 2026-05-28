@@ -22,10 +22,18 @@ import { RecipeTabs } from "./RecipeTabs";
 interface Props {
   project: Project;
   apiKeyMissing: boolean;
+  passcode?: string | null;
+  onPasscodeReject?: () => void;
   onUpdate: (patch: Partial<Project>) => void;
 }
 
-export function Workspace({ project, apiKeyMissing, onUpdate }: Props) {
+export function Workspace({
+  project,
+  apiKeyMissing,
+  passcode,
+  onPasscodeReject,
+  onUpdate,
+}: Props) {
   const [activeRecipe, setActiveRecipe] = useState<RecipeKey>("audience");
   const [streaming, setStreaming] = useState(false);
   const [streamBuffer, setStreamBuffer] = useState("");
@@ -61,9 +69,13 @@ export function Workspace({ project, apiKeyMissing, onUpdate }: Props) {
     abortRef.current = controller;
 
     try {
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+      };
+      if (passcode) headers["x-bootstrap-passcode"] = passcode;
       const res = await fetch("/api/generate", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
         signal: controller.signal,
         body: JSON.stringify({
           recipe: activeRecipe,
@@ -75,6 +87,10 @@ export function Workspace({ project, apiKeyMissing, onUpdate }: Props) {
         }),
       });
 
+      if (res.status === 401) {
+        onPasscodeReject?.();
+        throw new Error("Passcode rejected. Re-enter and try again.");
+      }
       if (!res.ok || !res.body) {
         const text = await res.text();
         throw new Error(text || `HTTP ${res.status}`);

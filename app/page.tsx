@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Sidebar } from "@/components/Sidebar";
 import { Workspace } from "@/components/Workspace";
+import { PasscodeGate } from "@/components/PasscodeGate";
 import {
   createProject,
   loadActiveId,
@@ -12,11 +13,19 @@ import {
 } from "@/lib/projectStore";
 import type { Project } from "@/lib/types";
 
+const PASSCODE_STORAGE_KEY = "bootstrap-fuel.passcode.v1";
+
+interface AppConfig {
+  hasApiKey: boolean;
+  passcodeRequired: boolean;
+}
+
 export default function Home() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [hydrated, setHydrated] = useState(false);
-  const [apiKeyMissing, setApiKeyMissing] = useState(false);
+  const [config, setConfig] = useState<AppConfig | null>(null);
+  const [passcode, setPasscode] = useState<string | null>(null);
 
   useEffect(() => {
     const loaded = loadProjects();
@@ -33,12 +42,15 @@ export default function Home() {
         stored && loaded.some((p) => p.id === stored) ? stored : loaded[0].id
       );
     }
+    setPasscode(window.localStorage.getItem(PASSCODE_STORAGE_KEY));
     setHydrated(true);
 
     fetch("/api/config")
       .then((r) => r.json())
-      .then((j: { hasApiKey: boolean }) => setApiKeyMissing(!j.hasApiKey))
-      .catch(() => setApiKeyMissing(true));
+      .then((j: AppConfig) => setConfig(j))
+      .catch(() =>
+        setConfig({ hasApiKey: false, passcodeRequired: false })
+      );
   }, []);
 
   useEffect(() => {
@@ -84,12 +96,26 @@ export default function Home() {
     [activeId]
   );
 
-  if (!hydrated) {
+  const handlePasscodeSubmit = useCallback((code: string) => {
+    window.localStorage.setItem(PASSCODE_STORAGE_KEY, code);
+    setPasscode(code);
+  }, []);
+
+  const handlePasscodeReject = useCallback(() => {
+    window.localStorage.removeItem(PASSCODE_STORAGE_KEY);
+    setPasscode(null);
+  }, []);
+
+  if (!hydrated || !config) {
     return (
-      <main className="min-h-screen flex items-center justify-center text-neutral-500 text-sm">
+      <main className="min-h-screen flex items-center justify-center bg-neutral-950 text-neutral-500 text-sm">
         Loading workspace…
       </main>
     );
+  }
+
+  if (config.passcodeRequired && !passcode) {
+    return <PasscodeGate onSubmit={handlePasscodeSubmit} />;
   }
 
   return (
@@ -104,7 +130,9 @@ export default function Home() {
       {activeProject ? (
         <Workspace
           project={activeProject}
-          apiKeyMissing={apiKeyMissing}
+          apiKeyMissing={!config.hasApiKey}
+          passcode={passcode}
+          onPasscodeReject={handlePasscodeReject}
           onUpdate={handleUpdate}
         />
       ) : (

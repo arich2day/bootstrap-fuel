@@ -21,7 +21,14 @@ interactive execution roadmaps and indie-friendly funding pipelines.
 - **Multi-project sidebar** with create / switch / delete.
 - **One-click blueprint export** to `BOOTSTRAP_FUEL_BLUEPRINT.md`.
 
-## Setup
+## Deploy in one click
+
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Farich2day%2Fbootstrap-fuel&env=GEMINI_API_KEY,ACCESS_PASSCODE,RATE_LIMIT_PER_HOUR&envDescription=Gemini%20key%20required.%20Passcode%20%26%20rate%20limit%20optional.&envLink=https%3A%2F%2Fgithub.com%2Farich2day%2Fbootstrap-fuel%2Fblob%2Fmain%2F.env.example)
+
+Full walkthrough including rate limiting, passcode gating, and cost posture:
+see [`DEPLOY.md`](./DEPLOY.md).
+
+## Local setup
 
 ```bash
 npm install
@@ -29,6 +36,11 @@ cp .env.example .env.local
 # Edit .env.local and set GEMINI_API_KEY
 npm run dev
 ```
+
+### Optional protections (set in `.env.local` or your host)
+
+- `ACCESS_PASSCODE` — gate the UI behind a shared passcode.
+- `RATE_LIMIT_PER_HOUR` — per-IP generation cap (default 20).
 
 Get a Gemini API key at <https://aistudio.google.com/apikey>. The UI runs
 without one — a warning banner is shown and the generate buttons remain
