@@ -23,6 +23,8 @@ interface Props {
   project: Project;
   apiKeyMissing: boolean;
   passcode?: string | null;
+  license?: string | null;
+  checkoutUrl?: string | null;
   onPasscodeReject?: () => void;
   onUpdate: (patch: Partial<Project>) => void;
 }
@@ -31,6 +33,8 @@ export function Workspace({
   project,
   apiKeyMissing,
   passcode,
+  license,
+  checkoutUrl,
   onPasscodeReject,
   onUpdate,
 }: Props) {
@@ -39,6 +43,7 @@ export function Workspace({
   const [streamBuffer, setStreamBuffer] = useState("");
   const [refinement, setRefinement] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [rateLimited, setRateLimited] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
 
   const recipes = useMemo(() => listRecipes(), []);
@@ -73,6 +78,7 @@ export function Workspace({
         "Content-Type": "application/json",
       };
       if (passcode) headers["x-bootstrap-passcode"] = passcode;
+      if (license) headers["x-bootstrap-license"] = license;
       const res = await fetch("/api/generate", {
         method: "POST",
         headers,
@@ -91,10 +97,16 @@ export function Workspace({
         onPasscodeReject?.();
         throw new Error("Passcode rejected. Re-enter and try again.");
       }
+      if (res.status === 429) {
+        const text = await res.text();
+        setRateLimited(true);
+        throw new Error(text || "Rate limit reached.");
+      }
       if (!res.ok || !res.body) {
         const text = await res.text();
         throw new Error(text || `HTTP ${res.status}`);
       }
+      setRateLimited(false);
 
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
@@ -225,8 +237,18 @@ export function Workspace({
           </div>
 
           {error && (
-            <div className="rounded-md border border-red-500/40 bg-red-500/10 text-red-200 text-xs px-3 py-2">
-              {error}
+            <div className="rounded-md border border-red-500/40 bg-red-500/10 text-red-200 text-xs px-3 py-2 flex items-start justify-between gap-3">
+              <span>{error}</span>
+              {rateLimited && !license && checkoutUrl && (
+                <a
+                  href={checkoutUrl}
+                  target="_blank"
+                  rel="noreferrer noopener"
+                  className="shrink-0 rounded bg-orange-500 hover:bg-orange-400 text-neutral-950 font-medium px-2 py-1"
+                >
+                  Upgrade →
+                </a>
+              )}
             </div>
           )}
 

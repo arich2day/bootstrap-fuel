@@ -2,6 +2,7 @@
 
 import { Plus, Trash2, Flame } from "lucide-react";
 import type { Project } from "@/lib/types";
+import type { ReactNode } from "react";
 
 interface Props {
   projects: Project[];
@@ -9,9 +10,17 @@ interface Props {
   onSelect: (id: string) => void;
   onCreate: () => void;
   onDelete: (id: string) => void;
+  footer?: ReactNode;
 }
 
-export function Sidebar({ projects, activeId, onSelect, onCreate, onDelete }: Props) {
+export function Sidebar({
+  projects,
+  activeId,
+  onSelect,
+  onCreate,
+  onDelete,
+  footer,
+}: Props) {
   return (
     <aside className="w-64 shrink-0 border-r border-neutral-800 bg-neutral-950 text-neutral-200 flex flex-col h-screen sticky top-0">
       <div className="px-4 py-4 border-b border-neutral-800 flex items-center gap-2">
@@ -66,6 +75,7 @@ export function Sidebar({ projects, activeId, onSelect, onCreate, onDelete }: Pr
         })}
       </div>
 
+      {footer}
       <div className="px-4 py-3 border-t border-neutral-800 text-[10px] text-neutral-500 leading-tight">
         Local-first. All projects live in your browser's localStorage. Clearing
         site data wipes them.

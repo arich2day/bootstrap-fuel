@@ -1,20 +1,22 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { buildPrompt } from "@/lib/promptTemplates";
 import { checkRateLimit, clientKeyFromRequest } from "@/lib/rateLimit";
+import { validateLicenseKey } from "@/lib/licenseValidation";
 import type { GenerateRequestBody } from "@/lib/types";
 
 export const runtime = "edge";
 
 const MODEL = "gemini-1.5-flash";
 
-const RATE_LIMIT = Number(process.env.RATE_LIMIT_PER_HOUR || 20);
-const RATE_WINDOW_MS = 60 * 60 * 1000;
+const FREE_LIMIT = Number(process.env.FREE_RATE_LIMIT_PER_HOUR || 3);
+const PRO_LIMIT = Number(process.env.PRO_RATE_LIMIT_PER_HOUR || 100);
+const WINDOW_MS = 60 * 60 * 1000;
 
 export async function POST(req: Request) {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
     return new Response(
-      "GEMINI_API_KEY is not configured on the server. Add it to .env.local and restart.",
+      "GEMINI_API_KEY is not configured on the server.",
       { status: 503 }
     );
   }
@@ -24,31 +26,44 @@ export async function POST(req: Request) {
     const supplied = req.headers.get("x-bootstrap-passcode") || "";
     if (supplied !== requiredPasscode) {
       return new Response(
-        "Access passcode required. Enter the passcode in the workspace header.",
+        "Access passcode required. Enter the passcode to continue.",
         { status: 401 }
       );
     }
   }
 
-  const key = clientKeyFromRequest(req);
-  const limit = checkRateLimit(key, {
-    limit: RATE_LIMIT,
-    windowMs: RATE_WINDOW_MS,
-  });
-  if (!limit.ok) {
-    const retrySec = Math.max(1, Math.ceil((limit.resetAt - Date.now()) / 1000));
-    return new Response(
-      `Rate limit reached (${limit.limit}/hr). Try again in ${Math.ceil(retrySec / 60)} min.`,
-      {
-        status: 429,
-        headers: {
-          "Retry-After": String(retrySec),
-          "X-RateLimit-Limit": String(limit.limit),
-          "X-RateLimit-Remaining": "0",
-          "X-RateLimit-Reset": String(Math.floor(limit.resetAt / 1000)),
-        },
-      }
-    );
+  let tier: "free" | "pro" = "free";
+  let limit = FREE_LIMIT;
+
+  const licenseKey = req.headers.get("x-bootstrap-license");
+  if (licenseKey) {
+    const result = await validateLicenseKey(licenseKey);
+    if (result.valid) {
+      tier = "pro";
+      limit = PRO_LIMIT;
+    }
+  }
+
+  const ipKey = clientKeyFromRequest(req);
+  const rateKey = tier === "pro" ? `pro:${licenseKey}` : `free:${ipKey}`;
+  const rate = checkRateLimit(rateKey, { limit, windowMs: WINDOW_MS });
+
+  if (!rate.ok) {
+    const retrySec = Math.max(1, Math.ceil((rate.resetAt - Date.now()) / 1000));
+    const msg =
+      tier === "free"
+        ? `Free limit reached (${limit}/hr). Upgrade to Pro for ${PRO_LIMIT}/hr, or wait ${Math.ceil(retrySec / 60)} min.`
+        : `Pro limit reached (${limit}/hr). Try again in ${Math.ceil(retrySec / 60)} min.`;
+    return new Response(msg, {
+      status: 429,
+      headers: {
+        "Retry-After": String(retrySec),
+        "X-RateLimit-Limit": String(rate.limit),
+        "X-RateLimit-Remaining": "0",
+        "X-RateLimit-Reset": String(Math.floor(rate.resetAt / 1000)),
+        "X-Bootstrap-Tier": tier,
+      },
+    });
   }
 
   let body: GenerateRequestBody;
@@ -96,9 +111,10 @@ export async function POST(req: Request) {
       "Content-Type": "text/plain; charset=utf-8",
       "Cache-Control": "no-cache, no-transform",
       "X-Content-Type-Options": "nosniff",
-      "X-RateLimit-Limit": String(limit.limit),
-      "X-RateLimit-Remaining": String(limit.remaining),
-      "X-RateLimit-Reset": String(Math.floor(limit.resetAt / 1000)),
+      "X-RateLimit-Limit": String(rate.limit),
+      "X-RateLimit-Remaining": String(rate.remaining),
+      "X-RateLimit-Reset": String(Math.floor(rate.resetAt / 1000)),
+      "X-Bootstrap-Tier": tier,
     },
   });
 }

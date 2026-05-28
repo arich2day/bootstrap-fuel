@@ -13,9 +13,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "BootstrapFuel — Indie founder execution engine",
+  title: "BootstrapFuel — Execution engine for indie founders",
   description:
-    "Turn raw startup ideas into interactive execution roadmaps and indie-friendly funding pipelines. Open source, $0 hosting, local-first.",
+    "Turn raw startup ideas into interactive execution roadmaps and indie-friendly funding pipelines. Local-first, AI-streamed.",
 };
 
 export default function RootLayout({
